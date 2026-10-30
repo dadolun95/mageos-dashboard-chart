@@ -1,0 +1,227 @@
+name: CI
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - master
+      - main
+  pull_request:
+    branches:
+      - master
+      - main
+
+# Built from the graycore actions instead of their reusable check-extension workflow:
+# its coding-standard job (phpcs) has no `enabled` guard, so it cannot be disabled through
+# .github/check-extension.json, and it fails the gate. Code style is checked by PHP-CS-Fixer
+# in the quality job instead. .github/check-extension.json still gates the jobs below and
+# narrows the services each one gets.
+
+env:
+  # Default graycore mirror; serves magento/* without repo.magento.com credentials.
+  MAGENTO_REPOSITORY: https://mirror.mage-os.org/
+
+jobs:
+  compute-matrix:
+    runs-on: ubuntu-latest
+    outputs:
+      resolved: ${{ steps.resolve.outputs.resolved }}
+    steps:
+      # resolve-check-config reads .github/check-extension.json from the workspace.
+      - uses: actions/checkout@v7
+
+      - uses: graycoreio/github-actions-magento2/supported-version@v8.11.0
+        id: supported-version
+
+      # Keep only entries matching the module PHP constraint (~8.3 || ~8.4 || ~8.5).
+      # Temporary: 2.4.7-p10 is left out too. Composer refuses its league/flysystem 2.x
+      # (advisory PKSA-w9tt-7782-78jx) and no fixed 2.x exists. While it is out, nothing tests
+      # the 2.4.7 floor. Drop the version filter once a fix is released.
+      - id: matrix
+        env:
+          MATRIX: ${{ steps.supported-version.outputs.matrix }}
+        run: |
+          echo "matrix=$(jq -c --arg v '2.4.7-p10' '
+            .include |= map(select(.version != $v and (.php | tostring | test("^8\\.[345]$"))))
+            | .include as $kept
+            | .magento |= map(select(. as $m | any($kept[]; .magento == $m)))
+          ' <<< "$MATRIX")" >> "$GITHUB_OUTPUT"
+
+      - env:
+          MATRIX: ${{ steps.matrix.outputs.matrix }}
+        run: echo "$MATRIX"
+
+      - uses: graycoreio/github-actions-magento2/resolve-check-config@v8.11.0
+        id: resolve
+        with:
+          kind: extension
+          matrix: ${{ steps.matrix.outputs.matrix }}
+
+  # PHPUnit 13 (require-dev) unit suite, PHP-CS-Fixer, PHPStan, Rector, PHPMD, ESLint and XSD validation,
+  # run on the standalone module install. phpunit/phpunit ^13.3 needs PHP >= 8.4.
+  quality:
+    name: Code quality (PHP ${{ matrix.php }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        php: ['8.4', '8.5']
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: shivammathur/setup-php@v2
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v2
+          coverage: none
+
+      - run: composer install --no-interaction --prefer-dist
+      - run: composer test:cs-fixer
+      - run: composer test:phpstan -- --no-progress --error-format=github
+      - run: composer test:rector
+      - run: composer test:phpmd
+      - run: composer test:unit
+      - run: composer test:xml
+
+      # ESLint resolves the Magento coding standard config from vendor/, so it runs after composer install.
+      - uses: actions/setup-node@v6
+        with:
+          node-version: '20'
+      - run: npm install --no-audit --no-fund
+      - run: npm run lint
+
+  # setup:di:compile inside a Magento install, for every supported version.
+  compile-extension:
+    needs: compute-matrix
+    if: ${{ fromJSON(needs.compute-matrix.outputs.resolved)['compile-extension'].enabled != false }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.compute-matrix.outputs.resolved)['compile-extension'].matrix }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: graycoreio/github-actions-magento2/setup-magento@v8.11.0
+        id: setup-magento
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v${{ matrix.composer }}
+          mode: extension
+          magento_version: ${{ matrix.magento }}
+          magento_repository: ${{ env.MAGENTO_REPOSITORY }}
+          composer_auth: ${{ secrets.COMPOSER_AUTH }}
+
+      - name: Add extension repository
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer config repositories.local path ${{ github.workspace }}
+
+      # MageOS_AdvancedReport is not published on a composer repository yet.
+      - name: Add MageOS_AdvancedReport repository
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer config repositories.advanced-report vcs https://github.com/lucafuser/mage-os-advanced-report
+
+      - name: Get package name
+        id: package
+        run: echo "name=$(jq -r .name "${{ github.workspace }}/composer.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Require extension
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer require "mageos/module-advanced-report:@dev" "${{ steps.package.outputs.name }}:@dev" --no-install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+
+      - name: Composer update
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer update --no-install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+
+      - uses: graycoreio/github-actions-magento2/cache-magento@v8.11.0
+        with:
+          composer_cache_key: ${{ matrix.magento }}
+          working-directory: ${{ steps.setup-magento.outputs.path }}
+
+      - name: Composer install
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+      - uses: graycoreio/github-actions-magento2/setup-di-compile@v8.11.0
+        with:
+          path: ${{ steps.setup-magento.outputs.path }}
+
+  # Test/Unit with the PHPUnit bundled in each Magento version.
+  unit-test-extension:
+    needs: compute-matrix
+    if: ${{ fromJSON(needs.compute-matrix.outputs.resolved)['unit-test-extension'].enabled != false }}
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix: ${{ fromJSON(needs.compute-matrix.outputs.resolved)['unit-test-extension'].matrix }}
+      fail-fast: false
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: graycoreio/github-actions-magento2/setup-magento@v8.11.0
+        id: setup-magento
+        with:
+          php-version: ${{ matrix.php }}
+          tools: composer:v${{ matrix.composer }}
+          mode: extension
+          magento_version: ${{ matrix.magento }}
+          magento_repository: ${{ env.MAGENTO_REPOSITORY }}
+          composer_auth: ${{ secrets.COMPOSER_AUTH }}
+
+      - name: Add extension repository
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer config repositories.local path ${{ github.workspace }}
+
+      # MageOS_AdvancedReport is not published on a composer repository yet.
+      - name: Add MageOS_AdvancedReport repository
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer config repositories.advanced-report vcs https://github.com/lucafuser/mage-os-advanced-report
+
+      - name: Get package name
+        id: package
+        run: echo "name=$(jq -r .name "${{ github.workspace }}/composer.json")" >> "$GITHUB_OUTPUT"
+
+      - name: Require extension
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer require "mageos/module-advanced-report:@dev" "${{ steps.package.outputs.name }}:@dev" --no-install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+
+      - name: Composer update
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer update --no-install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+
+      - uses: graycoreio/github-actions-magento2/cache-magento@v8.11.0
+        with:
+          composer_cache_key: ${{ matrix.magento }}
+          working-directory: ${{ steps.setup-magento.outputs.path }}
+
+      - name: Composer install
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: composer install
+        env:
+          COMPOSER_AUTH: ${{ secrets.COMPOSER_AUTH }}
+          COMPOSER_MIRROR_PATH_REPOS: 1
+
+      - name: Configure phpunit.xml.dist
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: |
+          cat > /tmp/testsuite.xml << 'EOF'
+                  <testsuite name="Extension_Unit_Tests">
+                      <directory>../../../vendor/${{ steps.package.outputs.name }}/Test/Unit</directory>
+                  </testsuite>
+          EOF
+          sed -i '/<testsuites>/r /tmp/testsuite.xml' dev/tests/unit/phpunit.xml.dist
+          # Allure breaks the unit runner: https://github.com/magento/magento2/issues/36702
+          sed -i '/<extensions>/,/<\/extensions>/d' dev/tests/unit/phpunit.xml.dist
+
+      - name: Run extension unit tests
+        working-directory: ${{ steps.setup-magento.outputs.path }}
+        run: vendor/bin/phpunit -c dev/tests/unit/phpunit.xml.dist --testsuite Extension_Unit_Tests
