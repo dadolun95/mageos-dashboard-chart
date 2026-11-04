@@ -101,6 +101,37 @@ final class ChartRegistryTest extends TestCase
         self::assertSame(3, $chart->sortOrder);
     }
 
+    public function testItTakesTypeMetricsDimensionAndSortFromThePresetChart(): void
+    {
+        $chart = $this->registry(
+            [
+                self::preset(
+                    'recent_carts',
+                    area: 'carts',
+                    dataset: 'carts',
+                    metrics: ['carts', 'cart_value', 'cart_items'],
+                    dimensions: [['code' => 'customer_email', 'granularity' => null]],
+                    sort: [['metric' => 'cart_items', 'direction' => 'desc']],
+                    chart: [
+                        'type' => 'bar',
+                        'metrics' => ['cart_value', 'carts'],
+                        'dimensions' => [['code' => 'activity_date', 'granularity' => 'day']],
+                        'sortBy' => 'activity_date',
+                        'sortDirection' => 'asc',
+                    ],
+                ),
+            ],
+            charts: ['recent_carts' => ['limit' => 366]],
+        )->getChart('recent_carts');
+
+        self::assertNotNull($chart);
+        self::assertSame(Chart::TYPE_BAR, $chart->type);
+        self::assertSame(['cart_value', 'carts'], $chart->metrics);
+        self::assertSame([['code' => 'activity_date', 'granularity' => 'day']], $chart->dimensions);
+        self::assertSame([['by' => 'activity_date', 'direction' => 'asc']], $chart->sort);
+        self::assertSame(366, $chart->limit);
+    }
+
     public function testItDropsThePresetSortOnMetricsTheChartDoesNotDraw(): void
     {
         $chart = $this->registry(

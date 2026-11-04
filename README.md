@@ -26,7 +26,9 @@ A block above the native dashboard (`adminhtml_dashboard_index.xml`, before `das
 - **Charts**: the admin's charts, collapsible (a closed chart sends no request until it is opened), with a period selector (chart default,
   today, last 7/30 days, month to date, last month, year to date), the dashboard store switcher scope, totals with the
   comparison delta, a link to the full Advanced Report and a remove button. Charts with metrics in different formats
-  (money / integer...) get a switcher: never two value axes.
+  (money / integer...) get a switcher: never two value axes. Line charts draw both the previous period and the
+  previous year as dashed lines, with one report per comparison; the totals delta refers to the previous period.
+  The chart type is not selectable here: the dashboard always uses the default of the preset.
 - **Personalize** (ACL `MageOS_DashboardChart::personalize`): show/hide, opened, order; Save or Reset to Default.
 
 Layout resolution (`Model\Dashboard\LayoutResolver`): the layout saved by the admin in `admin_user.extra`
@@ -59,23 +61,22 @@ saved in the displayed order.
 
 ## Chart definitions
 
-Every preset of `report_datasets.xml` (any module) **is already a chart**: id = preset code, section = preset area,
-first preset dimension, the preset sort metric (or first metric), line chart for a date dimension, top 10 horizontal
-bars otherwise, preset sort (presets without a sort keep their natural order: dates, hours, weekdays).
+Every preset of `report_datasets.xml` (any module) **is already a chart**: id = preset code, section = preset area.
+Type, metrics, dimension and sort come from the `<chart>` of the preset, so the dashboard and the Advanced Report page
+draw the same default chart with the same renderer (`MageOS_AdvancedReport/js/report/lib/chart-config`). A preset
+without `<chart>` falls back to its first dimension, its sort metric (or first metric), a line chart for a date
+dimension and horizontal bars otherwise. The dashboard shows 10 rows by default, line charts have no limit.
 
 `etc/dashboard_charts.xml` (schemas `dashboard_charts.xsd` merged / `dashboard_charts_file.xsd`
-per file, merged across modules by `section/@id` and `chart/@id`) declares the sections and refines the generated
-charts:
+per file, merged across modules by `section/@id` and `chart/@id`) declares the sections and refines the presentation
+of the generated charts on the dashboard:
 
 ```xml
 <section id="catalog" label="Catalog" sortOrder="20">
     <acl resource="MageOS_DashboardChart::catalog"/>
 </section>
-<chart id="stock_value" type="horizontalBar" limit="10" sortOrder="40">
+<chart id="stock_value" limit="10" sortOrder="40">
     <description>Top 10 SKUs by stock value at cost and at retail price.</description>
-    <metric code="stock_value_cost"/>
-    <metric code="stock_value_retail"/>
-    <dimension code="sku"/>
 </chart>
 <!-- another chart on an existing preset -->
 <chart id="stock_value_by_source" preset="stock_value" section="catalog" type="doughnut">
@@ -108,6 +109,10 @@ Chart attributes: `preset` (default: id), `section` (default: preset area), `lab
 (`line|bar|horizontalBar|doughnut|pie`), `size` (`half|full`), `limit`, `dateRange`, `compareTo`, `sortBy`,
 `sortDirection`, `sortOrder`, `disabled`; children `description`, `acl`, `metric` and `dimension` (`remove="true"`
 drops one inherited from another file).
+
+`type`, `metric`, `dimension`, `compareTo` and `sortBy` still override the preset, for example on a second chart of the
+same preset, but an override makes the dashboard differ from the Advanced Report page: declare the default in the
+preset instead.
 
 ### ACL
 

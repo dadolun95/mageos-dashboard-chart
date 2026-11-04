@@ -13,7 +13,8 @@ use MageOS\DashboardChart\Model\Config\Data;
  * All dashboard charts, independent of the current admin's rights (see {@see ChartAccess}).
  *
  * Every Advanced Report preset (report_datasets.xml) generates a chart with the preset code as id, in the section
- * of its area. dashboard_charts.xml declares the sections and refines generated charts or adds new ones
+ * of its area. Chart type, metrics, dimension and sort come from the preset (its <chart> in report_datasets.xml).
+ * dashboard_charts.xml declares the sections and refines generated charts or adds new ones
  * (another id on an existing preset). Charts on unknown presets are skipped.
  */
 class ChartRegistry
@@ -105,24 +106,18 @@ class ChartRegistry
         }
         $dataset = $this->definitionRegistry->getDataset($preset->dataset);
 
+        $presetChart = $preset->resolveChart();
         $dimensions = $definition['dimensions'] ?? [];
+        $type = $definition['type'] ?? null;
         if ($dimensions === []) {
-            $first = $preset->dimensions[0] ?? null;
-            $dimensions = $first !== null
-                ? [['code' => $first['code'], 'granularity' => $first['granularity']?->value]]
-                : [];
+            $dimensions = $presetChart['dimensions'];
+            $type ??= $presetChart['type'];
         }
-        $isDateSeries = $dimensions !== [] && $dimensions[0]['granularity'] !== null;
-        $type = $definition['type'] ?? ($isDateSeries ? Chart::TYPE_LINE : Chart::TYPE_HORIZONTAL_BAR);
+        $type ??= ($dimensions[0]['granularity'] ?? null) !== null ? Chart::TYPE_LINE : Chart::TYPE_HORIZONTAL_BAR;
 
-        $metrics = array_values(array_unique(array_map(strval(...), $definition['metrics'] ?? [])));
+        $metrics = array_values(array_unique(array_map(strval(...), $definition['metrics'] ?? []))) ?: $presetChart['metrics'];
         if ($metrics === []) {
-            $sortMetric = $preset->sort[0]['metric'] ?? null;
-            $metric = \in_array($sortMetric, $preset->metrics, true) ? $sortMetric : ($preset->metrics[0] ?? null);
-            if ($metric === null) {
-                return null;
-            }
-            $metrics = [$metric];
+            return null;
         }
 
         return new Chart(
@@ -147,7 +142,7 @@ class ChartRegistry
     }
 
     /**
-     * Explicit sort, else the preset sort on the charted metrics. Presets without a sort keep their natural order
+     * Explicit sort, else the sort of the preset chart, else the preset sort on the charted metrics. Presets without a sort keep their natural order
      * (date buckets, hours, weekdays).
      *
      * @param array<string,mixed> $definition
@@ -158,6 +153,9 @@ class ChartRegistry
     {
         if (!empty($definition['sortBy'])) {
             return [['by' => (string) $definition['sortBy'], 'direction' => (string) ($definition['sortDirection'] ?? 'desc')]];
+        }
+        if (!empty($preset->chart['sortBy'])) {
+            return [['by' => $preset->chart['sortBy'], 'direction' => $preset->chart['sortDirection'] ?? 'desc']];
         }
         $sort = [];
         foreach ($preset->sort as $entry) {
