@@ -27,10 +27,9 @@
         <description>Share of net sales by payment method.</description>
         <metric code="net_sales"/>
     </chart>
-    <chart id="sales_by_shipping_method" type="bar" sortOrder="30">
-        <description>Net sales and shipping amounts by shipping method.</description>
+    <chart id="sales_by_shipping_method" type="doughnut" sortOrder="30">
+        <description>Share of net sales by shipping method.</description>
         <metric code="net_sales"/>
-        <metric code="shipping"/>
     </chart>
     <chart id="sales_by_shipping_country" type="horizontalBar" limit="10" sortOrder="40">
         <description>Top 10 shipping countries by net sales.</description>
@@ -108,4 +107,6 @@
         <description>New customer accounts per day, compared with the previous period.</description>
         <metric code="registrations"/>
     </chart>
+
+    <chart id="cart_conversion" type="doughnut"/>
 </config>
