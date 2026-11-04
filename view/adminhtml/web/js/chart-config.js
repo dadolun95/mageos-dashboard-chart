@@ -17,6 +17,7 @@ define([
         TEXT_COLOR = '#514943',
         MAX_SLICES = PALETTE.length - 1,
         ROUND_TYPES = ['pie', 'doughnut'];
+    const COMPARISON_YEAR_COLOR = '#eda100';
 
     /**
      * @param {String} hex
@@ -222,26 +223,31 @@ define([
         });
 
         if (isLine) {
-            group.columns.forEach(function (column) {
-                if (!result.rows.some(function (row) {
-                    return row.comparison && row.comparison[column.code];
-                })) {
-                    return;
-                }
-                datasets.push({
-                    label: column.label + ' (' + $t('comparison period') + ')',
-                    data: result.rows.map(function (row) {
-                        var previous = row.comparison && row.comparison[column.code];
+            [
+                {key: 'comparison', label: $t('previous period'), color: COMPARISON_COLOR},
+                {key: 'comparison_year', label: $t('previous year'), color: COMPARISON_YEAR_COLOR}
+            ].forEach(function (comparison) {
+                group.columns.forEach(function (column) {
+                    if (!result.rows.some(function (row) {
+                        return row[comparison.key] && row[comparison.key][column.code];
+                    })) {
+                        return;
+                    }
+                    datasets.push({
+                        label: column.label + ' (' + comparison.label + ')',
+                        data: result.rows.map(function (row) {
+                            const previous = row[comparison.key] && row[comparison.key][column.code];
 
-                        return previous ? toNumber(previous.value) : null;
-                    }),
-                    borderColor: COMPARISON_COLOR,
-                    backgroundColor: 'transparent',
-                    borderDash: [5, 4],
-                    borderWidth: 2,
-                    pointRadius: 0,
-                    pointHoverRadius: 4,
-                    cubicInterpolationMode: 'monotone'
+                            return previous ? toNumber(previous.value) : null;
+                        }),
+                        borderColor: comparison.color,
+                        backgroundColor: 'transparent',
+                        borderDash: [5, 4],
+                        borderWidth: 2,
+                        pointRadius: 0,
+                        pointHoverRadius: 4,
+                        cubicInterpolationMode: 'monotone'
+                    });
                 });
             });
         }

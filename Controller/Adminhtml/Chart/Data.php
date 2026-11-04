@@ -13,8 +13,10 @@ use Magento\Framework\Exception\AuthorizationException;
 use MageOS\AdvancedReport\Api\ReportRunnerInterface;
 use MageOS\AdvancedReport\Model\Config as AdvancedReportConfig;
 use MageOS\AdvancedReport\Model\DataSource\QueryTimeoutException;
+use MageOS\AdvancedReport\Model\Query\CompareMode;
 use MageOS\AdvancedReport\Model\Query\InvalidRequestException;
 use MageOS\AdvancedReport\Model\Security\ErrorLogger;
+use MageOS\DashboardChart\Model\Chart\Chart;
 use MageOS\DashboardChart\Model\Chart\ChartAccess;
 use MageOS\DashboardChart\Model\Chart\ChartRegistry;
 use MageOS\DashboardChart\Model\Chart\RequestBuilder;
@@ -52,17 +54,23 @@ class Data extends Action implements HttpPostActionInterface
         }
 
         try {
-            $request = $this->requestBuilder->build(
-                $chart,
-                $this->getRequest()->getParam('period') ?: null,
-                [
-                    'store' => (int) $this->getRequest()->getParam('store'),
-                    'group' => (int) $this->getRequest()->getParam('group'),
-                    'website' => (int) $this->getRequest()->getParam('website'),
-                ]
-            );
+            $period = $this->getRequest()->getParam('period') ?: null;
+            $scope = [
+                'store' => (int) $this->getRequest()->getParam('store'),
+                'group' => (int) $this->getRequest()->getParam('group'),
+                'website' => (int) $this->getRequest()->getParam('website'),
+            ];
+            $isLine = $chart->type === Chart::TYPE_LINE;
+            $data = $this->reportRunner->run(
+                $this->requestBuilder->build($chart, $period, $scope, $isLine ? CompareMode::PREVIOUS_PERIOD->value : null)
+            )->toArray();
+            if ($isLine) {
+                $data = $this->addPreviousYear($data, $this->reportRunner->run(
+                    $this->requestBuilder->build($chart, $period, $scope, CompareMode::PREVIOUS_YEAR->value)
+                )->toArray());
+            }
 
-            return $result->setData($this->reportRunner->run($request)->toArray());
+            return $result->setData($data);
         } catch (InvalidRequestException $e) {
             return $this->error($result, 400, $e->getMessage());
         } catch (AuthorizationException $e) {
@@ -74,6 +82,25 @@ class Data extends Action implements HttpPostActionInterface
 
             return $this->error($result, 500, (string) __('An error occurred while loading the chart.'));
         }
+    }
+
+    /**
+     * @param array<string,mixed> $data
+     * @param array<string,mixed> $yearData
+     * @return array<string,mixed>
+     */
+    protected function addPreviousYear(array $data, array $yearData): array
+    {
+        $comparisons = [];
+        foreach ($yearData['rows'] as $row) {
+            $comparisons[json_encode($row['dims_raw'])] = $row['comparison'] ?? null;
+        }
+        foreach ($data['rows'] as &$row) {
+            $row['comparison_year'] = $comparisons[json_encode($row['dims_raw'])] ?? null;
+        }
+        unset($row);
+
+        return $data;
     }
 
     private function error(JsonResult $result, int $code, string $message): JsonResult

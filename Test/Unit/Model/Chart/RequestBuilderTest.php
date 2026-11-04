@@ -50,6 +50,13 @@ final class RequestBuilderTest extends TestCase
         self::assertSame(['type' => 'year_to_date'], $this->overrides['dateRange'] ?? null);
     }
 
+    public function testItUsesARequestedComparisonInsteadOfTheChartOne(): void
+    {
+        $this->builder()->build(self::chart('by_payment'), null, [], 'previous_year');
+
+        self::assertSame('previous_year', $this->overrides['compareTo'] ?? null);
+    }
+
     #[DataProvider('invalidPeriods')]
     public function testItIgnoresAnInvalidOrCustomPeriod(?string $period): void
     {

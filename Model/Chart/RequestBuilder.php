@@ -30,15 +30,16 @@ class RequestBuilder
      * @param Chart $chart
      * @param string|null $period A date range type overriding the chart one (ignored for dateless datasets).
      * @param array{store?: int, group?: int, website?: int} $scope Dashboard store switcher parameters.
+     * @param string|null $compareTo A comparison mode overriding the chart one.
      * @throws InvalidRequestException
      */
-    public function build(Chart $chart, ?string $period = null, array $scope = []): ReportRequestInterface
+    public function build(Chart $chart, ?string $period = null, array $scope = [], ?string $compareTo = null): ReportRequestInterface
     {
         $overrides = [
             'metrics' => $chart->metrics,
             'dimensions' => $chart->dimensions,
             'sort' => $chart->sort,
-            'compareTo' => $chart->compareTo,
+            'compareTo' => $compareTo ?? $chart->compareTo,
             'limit' => $chart->limit,
             'offset' => 0,
             'storeIds' => $this->resolveStoreIds($scope),

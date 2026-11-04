@@ -62,6 +62,7 @@ trait DefinitionTestTrait
         array $metrics = ['orders'],
         bool $dateless = false,
         ?int $limit = 10,
+        string $type = Chart::TYPE_BAR,
     ): Chart {
         return new Chart(
             id: $id,
@@ -70,7 +71,7 @@ trait DefinitionTestTrait
             section: new Section('sales', 'Sales', 10, ['MageOS_DashboardChart::charts']),
             label: 'Label ' . $id,
             description: 'Description ' . $id,
-            type: Chart::TYPE_BAR,
+            type: $type,
             size: 'half',
             metrics: $metrics,
             dimensions: [['code' => 'payment_method', 'granularity' => null]],
