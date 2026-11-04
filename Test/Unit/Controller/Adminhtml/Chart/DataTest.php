@@ -32,6 +32,9 @@ final class DataTest extends TestCase
     /** @var array<int,mixed> */
     private array $buildArguments = [];
 
+    /** @var array<int,string|null> */
+    private array $compareModes = [];
+
     public function testItRunsTheReportOfTheChartWithThePeriodAndScope(): void
     {
         $this->controller(['chart' => 'orders', 'period' => 'today', 'store' => '2'])->execute();
@@ -48,6 +51,29 @@ final class DataTest extends TestCase
         $this->controller(['chart' => 'orders', 'period' => ''])->execute();
 
         self::assertNull($this->buildArguments[1]);
+    }
+
+    public function testItRunsOnlyTheChartComparisonForOtherCharts(): void
+    {
+        $this->controller(['chart' => 'orders'])->execute();
+
+        self::assertSame([null], $this->compareModes);
+    }
+
+    public function testItAddsThePreviousYearToLineCharts(): void
+    {
+        $comparison = ['orders' => ['value' => 3.0, 'delta' => 1.0, 'delta_pct' => 0.5]];
+        $row = [
+            'dims' => [],
+            'dims_raw' => ['order_date' => '2026-11-01'],
+            'metrics' => ['orders' => 4],
+            'comparison' => $comparison,
+        ];
+
+        $this->controller(['chart' => 'trend'], rows: [$row])->execute();
+
+        self::assertSame(['previous_period', 'previous_year'], $this->compareModes);
+        self::assertSame($comparison, $this->resultData['rows'][0]['comparison_year']);
     }
 
     public function testItAnswers404ForAnUnknownChartOrADisabledReportModule(): void
@@ -95,6 +121,7 @@ final class DataTest extends TestCase
 
     /**
      * @param array<string,string> $params
+     * @param array<int,array<string,mixed>> $rows
      */
     private function controller(
         array $params,
@@ -102,21 +129,27 @@ final class DataTest extends TestCase
         bool $reportsEnabled = true,
         ?\Throwable $failure = null,
         ?ErrorLogger $logger = null,
+        array $rows = [],
     ): Data {
         $registry = $this->createStub(ChartRegistry::class);
         $registry->method('getChart')->willReturnCallback(
-            static fn (string $id): ?Chart => $id === 'orders' ? self::chart('orders') : null
+            static fn (string $id): ?Chart => match ($id) {
+                'orders' => self::chart('orders'),
+                'trend' => self::chart('trend', type: Chart::TYPE_LINE),
+                default => null,
+            }
         );
         $access = $this->createStub(ChartAccess::class);
         $access->method('isAllowed')->willReturn($allowed);
         $builder = $this->createStub(RequestBuilder::class);
         $builder->method('build')->willReturnCallback(function (mixed ...$arguments): ReportRequestInterface {
             $this->buildArguments = array_values($arguments);
+            $this->compareModes[] = $arguments[3] ?? null;
 
             return $this->createStub(ReportRequestInterface::class);
         });
         $result = $this->createStub(ReportResultInterface::class);
-        $result->method('toArray')->willReturn(['rows' => []]);
+        $result->method('toArray')->willReturn(['rows' => $rows]);
         $runner = $this->createStub(ReportRunnerInterface::class);
         if ($failure !== null) {
             $runner->method('run')->willThrowException($failure);

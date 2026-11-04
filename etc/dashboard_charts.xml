@@ -19,7 +19,7 @@
         <acl resource="MageOS_DashboardChart::sales"/>
     </section>
     <chart id="sales_overview" type="line" size="full" compareTo="previous_period" sortOrder="10">
-        <description>Net sales and orders per day, compared with the previous period.</description>
+        <description>Net sales and orders per day, compared with the previous period and the previous year.</description>
         <metric code="net_sales"/>
         <metric code="orders"/>
     </chart>
@@ -104,7 +104,7 @@
         <metric code="total_spent"/>
     </chart>
     <chart id="new_customer_registrations" type="line" sortOrder="20">
-        <description>New customer accounts per day, compared with the previous period.</description>
+        <description>New customer accounts per day, compared with the previous period and the previous year.</description>
         <metric code="registrations"/>
     </chart>
 
@@ -119,6 +119,9 @@
         <metric code="cart_items_value"/>
         <metric code="carts"/>
         <dimension code="activity_date" granularity="day"/>
+    </chart>
+    <chart id="abandoned_carts_trend" type="line">
+        <description>Abandoned carts per day, compared with the previous period and the previous year.</description>
     </chart>
     <chart id="abandoned_carts_list" type="bar" limit="366" sortBy="activity_date" sortDirection="asc">
         <description>Abandoned cart value and number per day.</description>
