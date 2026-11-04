@@ -1,5 +1,5 @@
 {
-    "name": "mageos/module-dashboard-chart",
+    "name": "mage-os/module-dashboard-chart",
     "description": "Admin dashboard charts for Magento Open Source / Mage-OS built on the MageOS Advanced Report presets, with per role defaults, a per admin layout and ACL aware chart definitions.",
     "type": "magento2-module",
     "license": [
