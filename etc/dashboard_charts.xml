@@ -108,5 +108,23 @@
         <metric code="registrations"/>
     </chart>
 
+    <chart id="recent_carts" type="bar" limit="366" sortBy="activity_date" sortDirection="asc">
+        <description>Value and number of the active carts updated within the configured recent window, per day.</description>
+        <metric code="cart_value"/>
+        <metric code="carts"/>
+        <dimension code="activity_date" granularity="day"/>
+    </chart>
+    <chart id="recent_cart_items" type="bar" limit="366" sortBy="activity_date" sortDirection="asc">
+        <description>Value of the products and number of the active carts updated within the configured recent window, per day.</description>
+        <metric code="cart_items_value"/>
+        <metric code="carts"/>
+        <dimension code="activity_date" granularity="day"/>
+    </chart>
+    <chart id="abandoned_carts_list" type="bar" limit="366" sortBy="activity_date" sortDirection="asc">
+        <description>Abandoned cart value and number per day.</description>
+        <metric code="abandoned_value"/>
+        <metric code="abandoned_carts"/>
+        <dimension code="activity_date" granularity="day"/>
+    </chart>
     <chart id="cart_conversion" type="doughnut"/>
 </config>
