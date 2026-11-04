@@ -9,7 +9,7 @@ define([
     'mage/translate',
     'chartjs/Chart.min',
     'MageOS_AdvancedReport/js/report/lib/format',
-    'MageOS_DashboardChart/js/chart-config',
+    'MageOS_AdvancedReport/js/report/lib/chart-config',
     'text!MageOS_DashboardChart/template/dashboard.html'
 ], function ($, ko, _, $t, Chart, formatter, chartConfig, template) {
     'use strict';

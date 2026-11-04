@@ -19,6 +19,7 @@ trait DefinitionTestTrait
      * @param string[] $metrics
      * @param array<int,array{code: string, granularity: Granularity|null}> $dimensions
      * @param array<int,array{metric: string, direction: string}> $sort
+     * @param array<string,mixed>|null $chart
      */
     private static function preset(
         string $code,
@@ -29,6 +30,7 @@ trait DefinitionTestTrait
         array $sort = [],
         string $compareTo = 'none',
         ?string $dateRange = 'last_30_days',
+        ?array $chart = null,
     ): Preset {
         return new Preset(
             $code,
@@ -43,6 +45,7 @@ trait DefinitionTestTrait
             $dateRange,
             ['mysql'],
             description: 'Description ' . $code,
+            chart: $chart,
         );
     }
 
