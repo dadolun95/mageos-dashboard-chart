@@ -33,10 +33,10 @@
         <xs:annotation>
             <xs:documentation>
                 A chart over an Advanced Report preset. Every preset of report_datasets.xml already gets a generated
-                chart (id = preset code, section = preset area, type inferred from its first dimension, first metric,
-                limit 10): a chart element with that id overrides it, a chart with another id adds a second chart on
-                "preset" (default: the id), disabled="true" removes it.
-                metric/dimension children replace the generated ones. Metrics sharing a format (money, integer...)
+                chart (id = preset code, section = preset area, type, metrics, dimension and sort from the chart of the
+                preset, limit 10): a chart element with that id overrides it, a chart with another id adds a second
+                chart on "preset" (default: the id), disabled="true" removes it.
+                metric/dimension children replace the preset ones. Metrics sharing a format (money, integer...)
                 are drawn together; the dashboard switches between formats (never two value axes).
             </xs:documentation>
         </xs:annotation>
